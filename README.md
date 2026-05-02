@@ -1,8 +1,7 @@
 # Humble Bundle Downloader
 
-[![PyPI Version](https://img.shields.io/pypi/v/humblebundle-downloader?color=blue)](https://pypi.org/project/humblebundle-downloader/)
-[![PyPI License](https://img.shields.io/pypi/l/humblebundle-downloader?color=green)](https://pypi.org/project/humblebundle-downloader/)
 [![Python Version](https://img.shields.io/badge/python-3.10+-yellow)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-purple)](https://docs.astral.sh/ruff/)
 [![Package Manager: uv](https://img.shields.io/badge/package%20manager-uv-orange)](https://docs.astral.sh/uv/)
 
@@ -29,24 +28,12 @@ updated content.
 
 ## Install
 
-### pip
+Clone the repo and install with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install humblebundle-downloader
-```
-
-### uv
-
-```bash
-uv tool install humblebundle-downloader
-```
-
-### Docker
-
-```bash
-docker run -v /path/to/downloads:/downloads \
-  ghcr.io/timsleeper/humblebundle-downloader \
-  --auto -l /downloads
+git clone https://github.com/timsleeper/humblebundle-downloader.git
+cd humblebundle-downloader
+uv sync
 ```
 
 ## Usage
