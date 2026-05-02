@@ -1,20 +1,25 @@
-image: python:3.10
+image: python:3.11
 
 stages:
+  - test
   - package
   - release
 
+test:
+  stage: test
+  script:
+    - pip install uv
+    - uv sync --all-extras --frozen
+    - uv run pytest
 
 pypi-package:
   stage: package
   only:
     - tags
   script:
-    - apt-get update -y && apt-get install -y curl
-    - curl -sSL https://install.python-poetry.org | python3 -
-    - export PATH="/root/.local/bin:$PATH"
-    - poetry build
-    - poetry publish
+    - pip install uv
+    - uv build
+    - uv publish
 
 .write_permission: &write_permission |
     git config --global user.email "gitlab-ci"; git config --global user.name "gitlab-ci"
@@ -39,10 +44,10 @@ build_image:
   only:
     - main
   script:
-        - export VERSION=$(grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
-        - export LATEST_IMAGE_TAG=ghcr.io/${GH_REGISTRY_USER}/humblebundle-downloader:latest
-        - export VERSION_IMAGE_TAG=ghcr.io/${GH_REGISTRY_USER}/humblebundle-downloader:$VERSION
-        - echo $GH_REGISTRY_PASSWORD | docker login -u $GH_REGISTRY_USER ghcr.io --password-stdin
-        - docker build -t $LATEST_IMAGE_TAG -t $VERSION_IMAGE_TAG .
-        - docker push $LATEST_IMAGE_TAG
-        - docker push $VERSION_IMAGE_TAG
+    - export VERSION=$(grep -m 1 version pyproject.toml | tr -s ' ' | tr -d '"' | tr -d "'" | cut -d' ' -f3)
+    - export LATEST_IMAGE_TAG=ghcr.io/${GH_REGISTRY_USER}/humblebundle-downloader:latest
+    - export VERSION_IMAGE_TAG=ghcr.io/${GH_REGISTRY_USER}/humblebundle-downloader:$VERSION
+    - echo $GH_REGISTRY_PASSWORD | docker login -u $GH_REGISTRY_USER ghcr.io --password-stdin
+    - docker build -t $LATEST_IMAGE_TAG -t $VERSION_IMAGE_TAG .
+    - docker push $LATEST_IMAGE_TAG
+    - docker push $VERSION_IMAGE_TAG
