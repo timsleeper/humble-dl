@@ -112,6 +112,7 @@ class DownloadEngine:
         """Perform the actual streamed download with progress tracking."""
         item.local_path.parent.mkdir(parents=True, exist_ok=True)
 
+        task_id: TaskID | None = None
         try:
             async with self._api.download_stream(item.url) as response:
                 if response.status_code != 200:
@@ -133,7 +134,6 @@ class DownloadEngine:
                         pass
 
                 total = int(response.headers.get("content-length", 0)) or None
-                task_id: TaskID | None = None
                 if self._progress and total:
                     task_id = self._progress.add_task(item.local_path.name, total=total)
 
@@ -156,9 +156,6 @@ class DownloadEngine:
                         f"expected {item.md5}, got {md5_hash.hexdigest()}"
                     )
 
-                if task_id is not None:
-                    self._progress.remove_task(task_id)
-
                 # Capture header before leaving context
                 _last_modified = last_modified
 
@@ -171,6 +168,12 @@ class DownloadEngine:
             if item.local_path.exists():
                 item.local_path.unlink()
             return DownloadStatus.FAILED
+        finally:
+            if task_id is not None and self._progress is not None:
+                try:
+                    self._progress.remove_task(task_id)
+                except KeyError:
+                    pass
 
         # Update cache
         file_info: dict[str, Any] = {

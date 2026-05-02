@@ -277,6 +277,82 @@ class TestDoDownload:
         assert status == DownloadStatus.COMPLETED
 
 
+class TestProgressTaskCleanup:
+    """The Rich progress task must be removed on every exit path or completed
+    bars accumulate on screen and hide active downloads."""
+
+    @respx.mock
+    async def test_removes_task_on_success(self, api, cache, library_path):
+        from rich.console import Console
+        from rich.progress import Progress
+
+        content = b"x" * 100
+        download_path = library_path / "ok.bin"
+        respx.get("https://dl.example.com/ok.bin").mock(
+            return_value=httpx.Response(
+                200, content=content, headers={"Content-Length": str(len(content))}
+            )
+        )
+
+        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+            engine = DownloadEngine(
+                api=api, cache=cache, library_path=library_path, progress=progress
+            )
+            item = make_item(url="https://dl.example.com/ok.bin", local_path=download_path)
+            status = await engine._do_download(item, None)
+            assert status == DownloadStatus.COMPLETED
+            assert progress.tasks == []
+
+    @respx.mock
+    async def test_removes_task_on_md5_mismatch(self, api, cache, library_path):
+        from rich.console import Console
+        from rich.progress import Progress
+
+        content = b"x" * 100
+        download_path = library_path / "bad.bin"
+        respx.get("https://dl.example.com/bad.bin").mock(
+            return_value=httpx.Response(
+                200, content=content, headers={"Content-Length": str(len(content))}
+            )
+        )
+
+        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+            engine = DownloadEngine(
+                api=api, cache=cache, library_path=library_path, progress=progress
+            )
+            item = make_item(
+                url="https://dl.example.com/bad.bin",
+                local_path=download_path,
+                md5="0" * 32,
+            )
+            with pytest.raises(Exception):
+                await engine._do_download(item, None)
+            assert progress.tasks == []
+
+    @respx.mock
+    async def test_removes_task_on_incomplete_download(self, api, cache, library_path):
+        from rich.console import Console
+        from rich.progress import Progress
+
+        download_path = library_path / "short.bin"
+        respx.get("https://dl.example.com/short.bin").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"only-50-bytes" + b"x" * 37,
+                headers={"Content-Length": "9999"},
+            )
+        )
+
+        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+            engine = DownloadEngine(
+                api=api, cache=cache, library_path=library_path, progress=progress
+            )
+            item = make_item(url="https://dl.example.com/short.bin", local_path=download_path)
+            with pytest.raises(Exception):
+                await engine._do_download(item, None)
+            assert progress.tasks == []
+
+
 class TestDownloadTroveItem:
     @respx.mock
     async def test_signs_and_downloads(self, engine, cache, library_path):
