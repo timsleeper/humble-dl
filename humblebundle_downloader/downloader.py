@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -153,16 +154,25 @@ class DownloadEngine:
                     )
 
                 downloaded = 0
+                md5_hash = hashlib.md5() if item.md5 else None
                 async with aiofiles.open(item.local_path, "wb") as f:
                     async for chunk in response.aiter_bytes(chunk_size=8192):
                         await f.write(chunk)
                         downloaded += len(chunk)
+                        if md5_hash is not None:
+                            md5_hash.update(chunk)
                         if task_id is not None:
                             self._progress.update(task_id, completed=downloaded)
 
                 if total and downloaded < total:
                     raise DownloadError(
                         f"Incomplete download: {downloaded}/{total} bytes"
+                    )
+
+                if md5_hash is not None and md5_hash.hexdigest() != item.md5:
+                    raise DownloadError(
+                        f"MD5 mismatch for {item.local_path.name}: "
+                        f"expected {item.md5}, got {md5_hash.hexdigest()}"
                     )
 
                 if task_id is not None:

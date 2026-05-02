@@ -167,6 +167,7 @@ class HumbleBundleAPI:
                             download_type=DownloadType.URL,
                             platform=platform,
                             extension=url_filename.rsplit(".", 1)[-1] if "." in url_filename else "",
+                            md5=file_type.get("md5"),
                         )
                     )
                 elif "asm_config" in file_type:

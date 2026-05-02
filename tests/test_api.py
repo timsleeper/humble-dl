@@ -31,6 +31,7 @@ ORDER_JSON = {
                     "download_struct": [
                         {
                             "url": {"web": "https://dl.humblebundle.com/supergame.zip?token=abc"},
+                            "md5": "d41d8cd98f00b204e9800998ecf8427e",
                         },
                         {
                             "external_link": "https://store.steampowered.com/app/12345",
@@ -163,6 +164,7 @@ class TestGetOrder:
         assert item.download_type == DownloadType.URL
         assert item.platform == "windows"
         assert item.extension == "zip"
+        assert item.md5 == "d41d8cd98f00b204e9800998ecf8427e"
 
     @respx.mock
     async def test_parses_asmjs_game(self, api, tmp_path):

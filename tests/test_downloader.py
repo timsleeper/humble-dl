@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -200,8 +201,10 @@ class TestDoDownload:
     @respx.mock
     async def test_stores_trove_metadata_in_cache(self, engine, cache, library_path):
         download_path = library_path / "trove.zip"
+        content = b"data"
+        content_md5 = "8d777f385d3dfec8815d20f7496026dc"
         respx.get("https://dl.example.com/trove.zip").mock(
-            return_value=httpx.Response(200, content=b"data")
+            return_value=httpx.Response(200, content=content)
         )
 
         item = make_item(
@@ -209,12 +212,69 @@ class TestDoDownload:
             url="https://dl.example.com/trove.zip",
             local_path=download_path,
             uploaded_at="1715769045",
-            md5="abc123",
+            md5=content_md5,
         )
         await engine._do_download(item, None)
         cached = await cache.get("trove:trove.zip")
         assert cached["uploaded_at"] == "1715769045"
-        assert cached["md5"] == "abc123"
+        assert cached["md5"] == content_md5
+
+    @respx.mock
+    async def test_md5_verification_passes(self, engine, library_path):
+        content = b"verified content"
+        content_md5 = hashlib.md5(content).hexdigest()
+        download_path = library_path / "verified.pdf"
+
+        respx.get("https://dl.example.com/verified.pdf").mock(
+            return_value=httpx.Response(200, content=content)
+        )
+
+        item = make_item(
+            cache_key="order1:verified.pdf",
+            url="https://dl.example.com/verified.pdf",
+            local_path=download_path,
+            md5=content_md5,
+        )
+        status = await engine._do_download(item, None)
+        assert status == DownloadStatus.COMPLETED
+        assert download_path.exists()
+        assert download_path.read_bytes() == content
+
+    @respx.mock
+    async def test_md5_mismatch_deletes_file(self, engine, library_path):
+        content = b"corrupted content"
+        download_path = library_path / "bad.pdf"
+
+        respx.get("https://dl.example.com/bad.pdf").mock(
+            return_value=httpx.Response(200, content=content)
+        )
+
+        item = make_item(
+            cache_key="order1:bad.pdf",
+            url="https://dl.example.com/bad.pdf",
+            local_path=download_path,
+            md5="0000000000000000000000000000dead",
+        )
+        with pytest.raises(Exception):
+            await engine._do_download(item, None)
+        assert not download_path.exists()
+
+    @respx.mock
+    async def test_no_md5_skips_verification(self, engine, library_path):
+        download_path = library_path / "nocheck.pdf"
+
+        respx.get("https://dl.example.com/nocheck.pdf").mock(
+            return_value=httpx.Response(200, content=b"anything")
+        )
+
+        item = make_item(
+            cache_key="order1:nocheck.pdf",
+            url="https://dl.example.com/nocheck.pdf",
+            local_path=download_path,
+            md5=None,
+        )
+        status = await engine._do_download(item, None)
+        assert status == DownloadStatus.COMPLETED
 
 
 class TestDownloadTroveItem:
@@ -236,7 +296,7 @@ class TestDownloadTroveItem:
             url="game.zip",
             local_path=download_path,
             uploaded_at="123",
-            md5="abc",
+            md5="95f42a6a06c834137266411f9177f99d",
             machine_name="game_windows",
         )
         status = await engine._download_trove_item(item)
