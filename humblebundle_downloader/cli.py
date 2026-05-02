@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from rich.progress import (
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
+from rich.table import Table
 
 from .auth import create_client
 from .exceptions import AuthError
@@ -226,3 +229,120 @@ async def _run(
                 await engine.download_library(purchase_keys=purchase_keys)
 
         await cache.flush()
+
+
+@app.command()
+def verify(
+    library_path: Path = typer.Option(
+        ...,
+        "--library-path",
+        "-l",
+        help="Folder where content was downloaded.",
+    ),
+) -> None:
+    """Verify integrity of downloaded files using cached MD5 hashes and file sizes."""
+    cache_file = library_path / ".cache.json"
+    if not cache_file.exists():
+        console.print("[red]Error:[/] No .cache.json found. Nothing to verify.")
+        raise typer.Exit(code=1)
+
+    data = json.loads(cache_file.read_text())
+
+    missing = []
+    size_mismatch = []
+    md5_mismatch = []
+    ok = 0
+    skipped = 0
+
+    entries_with_path = [
+        (key, entry) for key, entry in data.items() if "local_path" in entry
+    ]
+
+    if not entries_with_path:
+        console.print(
+            "[yellow]No verification data found.[/] "
+            "Re-download files to populate file_md5/file_size in the cache."
+        )
+        raise typer.Exit(code=1)
+
+    skipped = len(data) - len(entries_with_path)
+
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        console=console,
+    ) as progress:
+        task = progress.add_task("Verifying files...", total=len(entries_with_path))
+
+        for key, entry in entries_with_path:
+            local_path = Path(entry["local_path"])
+            progress.update(task, description=local_path.name)
+
+            if not local_path.exists():
+                missing.append(key)
+                progress.advance(task)
+                continue
+
+            expected_size = entry.get("file_size")
+            if expected_size is not None:
+                actual_size = local_path.stat().st_size
+                if actual_size != expected_size:
+                    size_mismatch.append((key, expected_size, actual_size))
+                    progress.advance(task)
+                    continue
+
+            expected_md5 = entry.get("file_md5")
+            if expected_md5 is not None:
+                md5_hash = hashlib.md5()
+                with open(local_path, "rb") as f:
+                    for chunk in iter(lambda: f.read(8192), b""):
+                        md5_hash.update(chunk)
+                if md5_hash.hexdigest() != expected_md5:
+                    md5_mismatch.append((key, expected_md5, md5_hash.hexdigest()))
+                    progress.advance(task)
+                    continue
+
+            ok += 1
+            progress.advance(task)
+
+    console.print()
+
+    if missing or size_mismatch or md5_mismatch:
+        if missing:
+            table = Table(title="Missing Files", show_lines=False)
+            table.add_column("Cache Key", style="red")
+            for key in missing:
+                table.add_row(key)
+            console.print(table)
+            console.print()
+
+        if size_mismatch:
+            table = Table(title="Size Mismatch", show_lines=False)
+            table.add_column("Cache Key", style="yellow")
+            table.add_column("Expected", justify="right")
+            table.add_column("Actual", justify="right")
+            for key, expected, actual in size_mismatch:
+                table.add_row(key, str(expected), str(actual))
+            console.print(table)
+            console.print()
+
+        if md5_mismatch:
+            table = Table(title="MD5 Mismatch", show_lines=False)
+            table.add_column("Cache Key", style="yellow")
+            table.add_column("Expected MD5")
+            table.add_column("Actual MD5")
+            for key, expected, actual in md5_mismatch:
+                table.add_row(key, expected, actual)
+            console.print(table)
+            console.print()
+
+    problems = len(missing) + len(size_mismatch) + len(md5_mismatch)
+    console.print(
+        f"[green]{ok} OK[/]  "
+        f"[red]{problems} failed[/]  "
+        f"[dim]{skipped} skipped (no verification data)[/]"
+    )
+
+    if problems > 0:
+        raise typer.Exit(code=1)

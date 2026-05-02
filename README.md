@@ -53,28 +53,33 @@ Pick **one** method -- they are mutually exclusive.
 
 ```bash
 # Download everything, auto-detect browser cookies
-hbd --auto -l ~/HumbleLibrary
+hbd download --auto -l ~/HumbleLibrary
 
 # Download only PDFs from a specific browser
-hbd --browser firefox -l ~/HumbleLibrary --include pdf
+hbd download --browser firefox -l ~/HumbleLibrary --include pdf
 
 # Download ebooks only, 10 parallel downloads, with debug logging
-hbd --auto -l ~/HumbleLibrary -p ebook -n 10 --verbose
+hbd download --auto -l ~/HumbleLibrary -p ebook -n 10 --verbose
 
 # Download Humble Trove content only
-hbd --auto -l ~/HumbleLibrary --trove
+hbd download --auto -l ~/HumbleLibrary --trove
 
 # Re-check for updated versions of already-downloaded files
-hbd --auto -l ~/HumbleLibrary --update
+hbd download --auto -l ~/HumbleLibrary --update
 
 # Download specific bundles by purchase key
-hbd --auto -l ~/HumbleLibrary -k PURCHASE_KEY_1 -k PURCHASE_KEY_2
+hbd download --auto -l ~/HumbleLibrary -k PURCHASE_KEY_1 -k PURCHASE_KEY_2
 
 # Using a session cookie (quotes are part of the value)
-hbd -s '"eyJ...long_value..."' -l ~/HumbleLibrary
+hbd download -s '"eyJ...long_value..."' -l ~/HumbleLibrary
+
+# Verify integrity of downloaded files
+hbd verify -l ~/HumbleLibrary
 ```
 
 ### CLI Reference
+
+**`hbd download`** -- download your library:
 
 ```
 Options:
@@ -91,7 +96,13 @@ Options:
   -k, --keys TEXT            Only download specific purchase keys (repeatable)
   -n, --concurrent INTEGER   Max parallel downloads [default: 5, range: 1-20]
   -v, --verbose              Enable debug logging
-  --help                     Show this message and exit
+```
+
+**`hbd verify`** -- verify integrity of downloaded files:
+
+```
+Options:
+  -l, --library-path PATH    Folder where content was downloaded (required)
 ```
 
 ## Notes
