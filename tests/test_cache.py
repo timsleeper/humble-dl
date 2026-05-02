@@ -1,10 +1,9 @@
 import asyncio
 import json
-from pathlib import Path
 
 import pytest
 
-from humblebundle_downloader.cache import DownloadCache
+from humble_dl.cache import DownloadCache
 
 
 @pytest.fixture

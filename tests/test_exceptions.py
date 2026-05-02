@@ -1,4 +1,4 @@
-from humblebundle_downloader.exceptions import (
+from humble_dl.exceptions import (
     APIError,
     AuthError,
     DownloadError,

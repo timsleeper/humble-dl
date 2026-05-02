@@ -1,18 +1,15 @@
-import http.cookiejar
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
-from humblebundle_downloader.auth import (
+from humble_dl.auth import (
     _cookies_from_file,
     _cookies_from_rookiepy,
     _cookies_from_session_auth,
     create_client,
 )
-from humblebundle_downloader.exceptions import AuthError
+from humble_dl.exceptions import AuthError
 
 
 class TestCookiesFromSessionAuth:

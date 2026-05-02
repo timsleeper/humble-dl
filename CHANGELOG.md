@@ -1,6 +1,18 @@
 # Change log
 
 
+## 0.5.1
+
+- **Rebrand**: project renamed to `humble-dl`. Distribution name on PyPI is now
+  `humble-dl` and the import name is `humble_dl`. The CLI command remains `hbd`.
+- Fork now maintained by Felipe Tadeu under
+  [github.com/timsleeper/humble-dl](https://github.com/timsleeper/humble-dl).
+- Released to PyPI for the first time under the new name.
+- Docker image published to `ghcr.io/timsleeper/humble-dl`.
+- Migrated CI from GitLab to GitHub Actions; releases use PyPI Trusted
+  Publishing (no API token in repo).
+
+
 ## 0.5.0
 
 - **Breaking**: Complete rewrite of the codebase

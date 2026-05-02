@@ -1,5 +1,6 @@
-# Humble Bundle Downloader
+# humble-dl
 
+[![PyPI](https://img.shields.io/pypi/v/humble-dl.svg)](https://pypi.org/project/humble-dl/)
 [![Python Version](https://img.shields.io/badge/python-3.10+-yellow)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-purple)](https://docs.astral.sh/ruff/)
@@ -28,11 +29,36 @@ updated content.
 
 ## Install
 
-Clone the repo and install with [uv](https://docs.astral.sh/uv/):
+From PyPI:
 
 ```bash
-git clone https://github.com/timsleeper/humblebundle-downloader.git
-cd humblebundle-downloader
+pip install humble-dl
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv tool install humble-dl
+```
+
+Or with [pipx](https://pipx.pypa.io/):
+
+```bash
+pipx install humble-dl
+```
+
+Run via Docker:
+
+```bash
+docker run --rm -v ~/HumbleLibrary:/library ghcr.io/timsleeper/humble-dl:latest \
+  download -s '"YOUR_SESSION_COOKIE"' -l /library
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/timsleeper/humble-dl.git
+cd humble-dl
 uv sync
 ```
 
@@ -122,7 +148,7 @@ Options:
 ## Architecture
 
 ```
-humblebundle_downloader/
+humble_dl/
     cli.py           Typer CLI with Rich console output
     auth.py          Cookie extraction (rookiepy, cookie file, session auth)
     api.py           Async Humble Bundle API client (httpx)

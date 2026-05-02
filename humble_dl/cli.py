@@ -123,8 +123,7 @@ def download(
     ]
     if sum(auth_options) == 0:
         console.print(
-            "[red]Error:[/] One of --cookie-file, --session-auth, "
-            "--browser, or --auto is required."
+            "[red]Error:[/] One of --cookie-file, --session-auth, --browser, or --auto is required."
         )
         raise typer.Exit(code=2)
     if sum(auth_options) > 1:
@@ -254,9 +253,7 @@ def verify(
     ok = 0
     skipped = 0
 
-    entries_with_path = [
-        (key, entry) for key, entry in data.items() if "local_path" in entry
-    ]
+    entries_with_path = [(key, entry) for key, entry in data.items() if "local_path" in entry]
 
     if not entries_with_path:
         console.print(

@@ -7,12 +7,8 @@ from typing import Any
 
 import aiofiles
 from rich.progress import (
-    BarColumn,
-    DownloadColumn,
     Progress,
     TaskID,
-    TimeRemainingColumn,
-    TransferSpeedColumn,
 )
 
 from .api import HumbleBundleAPI
@@ -84,9 +80,7 @@ class DownloadEngine:
         tasks = []
         for product in order.products:
             for link in product.external_links:
-                logger.info(
-                    f"External link: {order.bundle_title}/{product.human_name}: {link}"
-                )
+                logger.info(f"External link: {order.bundle_title}/{product.human_name}: {link}")
             for item in product.downloads:
                 if isinstance(item, AsmJsGame):
                     tasks.append(self._download_asmjs_game(item))
@@ -101,9 +95,7 @@ class DownloadEngine:
             logger.info(f"Skipping platform {item.platform}: {item.local_path.name}")
             return DownloadStatus.SKIPPED
 
-        if not should_download_file(
-            item.local_path.name, self._ext_include, self._ext_exclude
-        ):
+        if not should_download_file(item.local_path.name, self._ext_include, self._ext_exclude):
             logger.info(f"Skipping extension: {item.local_path.name}")
             return DownloadStatus.SKIPPED
 
@@ -123,17 +115,11 @@ class DownloadEngine:
         try:
             async with self._api.download_stream(item.url) as response:
                 if response.status_code != 200:
-                    logger.debug(
-                        f"File unavailable: {item.url} ({response.status_code})"
-                    )
+                    logger.debug(f"File unavailable: {item.url} ({response.status_code})")
                     return DownloadStatus.FAILED
 
                 last_modified = response.headers.get("Last-Modified")
-                if (
-                    cached
-                    and last_modified
-                    and last_modified == cached.get("url_last_modified")
-                ):
+                if cached and last_modified and last_modified == cached.get("url_last_modified"):
                     return DownloadStatus.SKIPPED
 
                 # Rename old file if updating
@@ -149,9 +135,7 @@ class DownloadEngine:
                 total = int(response.headers.get("content-length", 0)) or None
                 task_id: TaskID | None = None
                 if self._progress and total:
-                    task_id = self._progress.add_task(
-                        item.local_path.name, total=total
-                    )
+                    task_id = self._progress.add_task(item.local_path.name, total=total)
 
                 downloaded = 0
                 md5_hash = hashlib.md5()
@@ -164,9 +148,7 @@ class DownloadEngine:
                             self._progress.update(task_id, completed=downloaded)
 
                 if total and downloaded < total:
-                    raise DownloadError(
-                        f"Incomplete download: {downloaded}/{total} bytes"
-                    )
+                    raise DownloadError(f"Incomplete download: {downloaded}/{total} bytes")
 
                 if item.md5 and md5_hash.hexdigest() != item.md5:
                     raise DownloadError(
@@ -216,9 +198,7 @@ class DownloadEngine:
         """Download a trove item: sign URL first, then download."""
         if not should_download_platform(item.platform, self._platform_include):
             return DownloadStatus.SKIPPED
-        if not should_download_file(
-            item.local_path.name, self._ext_include, self._ext_exclude
-        ):
+        if not should_download_file(item.local_path.name, self._ext_include, self._ext_exclude):
             return DownloadStatus.SKIPPED
 
         cached = await self._cache.get(item.cache_key)
@@ -291,9 +271,7 @@ class DownloadEngine:
 
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    async def _create_local_asmjs_html(
-        self, game: AsmJsGame, manifest: dict[str, str]
-    ) -> None:
+    async def _create_local_asmjs_html(self, game: AsmJsGame, manifest: dict[str, str]) -> None:
         """Create local.html with manifest URLs replaced by local filenames."""
         try:
             src = game.local_folder / f"{game.game_name}.html"

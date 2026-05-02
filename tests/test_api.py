@@ -1,13 +1,10 @@
-import json
-from pathlib import Path
-
 import httpx
 import pytest
 import respx
 
-from humblebundle_downloader.api import HumbleBundleAPI
-from humblebundle_downloader.exceptions import APIError
-from humblebundle_downloader.models import AsmJsGame, DownloadItem, DownloadType
+from humble_dl.api import HumbleBundleAPI
+from humble_dl.exceptions import APIError
+from humble_dl.models import AsmJsGame, DownloadItem, DownloadType
 
 
 LIBRARY_HTML = """
@@ -42,7 +39,9 @@ ORDER_JSON = {
                     "platform": "linux",
                     "download_struct": [
                         {
-                            "url": {"web": "https://dl.humblebundle.com/supergame_linux.tar.gz?t=x"},
+                            "url": {
+                                "web": "https://dl.humblebundle.com/supergame_linux.tar.gz?t=x"
+                            },
                         },
                     ],
                 },
@@ -132,9 +131,9 @@ class TestGetPurchaseKeys:
 class TestGetOrder:
     @respx.mock
     async def test_parses_order_with_products(self, api, tmp_path):
-        respx.get(
-            "https://www.humblebundle.com/api/v1/order/order123?all_tpkds=true"
-        ).mock(return_value=httpx.Response(200, json=ORDER_JSON))
+        respx.get("https://www.humblebundle.com/api/v1/order/order123?all_tpkds=true").mock(
+            return_value=httpx.Response(200, json=ORDER_JSON)
+        )
 
         order = await api.get_order("order123", tmp_path)
         assert order.order_id == "order123"
@@ -151,16 +150,18 @@ class TestGetOrder:
 
     @respx.mock
     async def test_download_item_fields(self, api, tmp_path):
-        respx.get(
-            "https://www.humblebundle.com/api/v1/order/order123?all_tpkds=true"
-        ).mock(return_value=httpx.Response(200, json=ORDER_JSON))
+        respx.get("https://www.humblebundle.com/api/v1/order/order123?all_tpkds=true").mock(
+            return_value=httpx.Response(200, json=ORDER_JSON)
+        )
 
         order = await api.get_order("order123", tmp_path)
         item = order.products[0].downloads[0]
         assert isinstance(item, DownloadItem)
         assert item.cache_key == "order123:supergame.zip"
         assert item.url == "https://dl.humblebundle.com/supergame.zip?token=abc"
-        assert item.local_path == tmp_path / "Humble Indie Bundle 1" / "Super Game" / "supergame.zip"
+        assert (
+            item.local_path == tmp_path / "Humble Indie Bundle 1" / "Super Game" / "supergame.zip"
+        )
         assert item.download_type == DownloadType.URL
         assert item.platform == "windows"
         assert item.extension == "zip"
@@ -168,9 +169,9 @@ class TestGetOrder:
 
     @respx.mock
     async def test_parses_asmjs_game(self, api, tmp_path):
-        respx.get(
-            "https://www.humblebundle.com/api/v1/order/order456?all_tpkds=true"
-        ).mock(return_value=httpx.Response(200, json=ORDER_JSON_WITH_ASM))
+        respx.get("https://www.humblebundle.com/api/v1/order/order456?all_tpkds=true").mock(
+            return_value=httpx.Response(200, json=ORDER_JSON_WITH_ASM)
+        )
 
         order = await api.get_order("order456", tmp_path)
         product = order.products[0]
@@ -186,9 +187,9 @@ class TestGetOrder:
 
     @respx.mock
     async def test_raises_on_http_error(self, api, tmp_path):
-        respx.get(
-            "https://www.humblebundle.com/api/v1/order/bad?all_tpkds=true"
-        ).mock(return_value=httpx.Response(500))
+        respx.get("https://www.humblebundle.com/api/v1/order/bad?all_tpkds=true").mock(
+            return_value=httpx.Response(500)
+        )
         with pytest.raises(APIError, match="Failed to fetch order"):
             await api.get_order("bad", tmp_path)
 

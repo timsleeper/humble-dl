@@ -1,6 +1,4 @@
-import pytest
-
-from humblebundle_downloader.filters import (
+from humble_dl.filters import (
     get_file_ext,
     should_download_ext,
     should_download_file,
@@ -139,12 +137,8 @@ class TestShouldDownloadFile:
         assert should_download_file("anything.xyz") is True
 
     def test_complex_filename(self):
-        assert should_download_file(
-            "Game_v2.1_linux.tar.gz", ext_include=["gz"]
-        ) is True
-        assert should_download_file(
-            "Game_v2.1_linux.tar.gz", ext_include=["tar"]
-        ) is False
+        assert should_download_file("Game_v2.1_linux.tar.gz", ext_include=["gz"]) is True
+        assert should_download_file("Game_v2.1_linux.tar.gz", ext_include=["tar"]) is False
 
     def test_filename_with_query_params(self):
         # The caller should strip query params before calling, but test the raw behavior

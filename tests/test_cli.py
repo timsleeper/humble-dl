@@ -1,12 +1,10 @@
 import hashlib
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from typer.testing import CliRunner
 
-from humblebundle_downloader.cli import app
+from humble_dl.cli import app
 
 runner = CliRunner()
 
@@ -34,9 +32,7 @@ class TestAuthValidation:
         assert "Only one" in result.output
 
     def test_auto_and_session_auth_mutually_exclusive(self, tmp_path):
-        result = runner.invoke(
-            app, ["download", "-l", str(tmp_path), "--auto", "-s", "value"]
-        )
+        result = runner.invoke(app, ["download", "-l", str(tmp_path), "--auto", "-s", "value"])
         assert result.exit_code == 2
         assert "Only one" in result.output
 
@@ -89,21 +85,17 @@ class TestLibraryPathRequired:
 
 class TestConcurrentValidation:
     def test_concurrent_below_min(self, tmp_path):
-        result = runner.invoke(
-            app, ["download", "-l", str(tmp_path), "-s", "cookie", "-n", "0"]
-        )
+        result = runner.invoke(app, ["download", "-l", str(tmp_path), "-s", "cookie", "-n", "0"])
         assert result.exit_code != 0
 
     def test_concurrent_above_max(self, tmp_path):
-        result = runner.invoke(
-            app, ["download", "-l", str(tmp_path), "-s", "cookie", "-n", "21"]
-        )
+        result = runner.invoke(app, ["download", "-l", str(tmp_path), "-s", "cookie", "-n", "21"])
         assert result.exit_code != 0
 
 
 class TestSuccessfulInvocation:
     def test_session_auth_invokes_run(self, tmp_path):
-        with patch("humblebundle_downloader.cli._run", new_callable=AsyncMock) as mock_run:
+        with patch("humble_dl.cli._run", new_callable=AsyncMock) as mock_run:
             result = runner.invoke(
                 app, ["download", "-l", str(tmp_path), "-s", "my_session_cookie"]
             )
@@ -117,7 +109,7 @@ class TestSuccessfulInvocation:
             assert call_kwargs["update"] is False
 
     def test_auto_cookies_invokes_run(self, tmp_path):
-        with patch("humblebundle_downloader.cli._run", new_callable=AsyncMock) as mock_run:
+        with patch("humble_dl.cli._run", new_callable=AsyncMock) as mock_run:
             result = runner.invoke(app, ["download", "-l", str(tmp_path), "--auto"])
             assert result.exit_code == 0
             call_kwargs = mock_run.call_args.kwargs
@@ -127,31 +119,38 @@ class TestSuccessfulInvocation:
             assert call_kwargs["browser"] is None
 
     def test_browser_invokes_run(self, tmp_path):
-        with patch("humblebundle_downloader.cli._run", new_callable=AsyncMock) as mock_run:
-            result = runner.invoke(
-                app, ["download", "-l", str(tmp_path), "-b", "firefox"]
-            )
+        with patch("humble_dl.cli._run", new_callable=AsyncMock) as mock_run:
+            result = runner.invoke(app, ["download", "-l", str(tmp_path), "-b", "firefox"])
             assert result.exit_code == 0
             call_kwargs = mock_run.call_args.kwargs
             assert call_kwargs["browser"] == "firefox"
 
     def test_all_options_passed_through(self, tmp_path):
-        with patch("humblebundle_downloader.cli._run", new_callable=AsyncMock) as mock_run:
+        with patch("humble_dl.cli._run", new_callable=AsyncMock) as mock_run:
             result = runner.invoke(
                 app,
                 [
                     "download",
-                    "-l", str(tmp_path),
-                    "-s", "cookie",
+                    "-l",
+                    str(tmp_path),
+                    "-s",
+                    "cookie",
                     "--trove",
                     "--update",
-                    "-p", "ebook",
-                    "-p", "audio",
-                    "-i", "pdf",
-                    "-i", "epub",
-                    "-k", "key1",
-                    "-k", "key2",
-                    "-n", "10",
+                    "-p",
+                    "ebook",
+                    "-p",
+                    "audio",
+                    "-i",
+                    "pdf",
+                    "-i",
+                    "epub",
+                    "-k",
+                    "key1",
+                    "-k",
+                    "key2",
+                    "-n",
+                    "10",
                     "--verbose",
                 ],
             )
@@ -167,10 +166,8 @@ class TestSuccessfulInvocation:
     def test_cookie_file_invokes_run(self, tmp_path):
         cookie_file = tmp_path / "cookies.txt"
         cookie_file.write_text("dummy cookie")
-        with patch("humblebundle_downloader.cli._run", new_callable=AsyncMock) as mock_run:
-            result = runner.invoke(
-                app, ["download", "-l", str(tmp_path), "-c", str(cookie_file)]
-            )
+        with patch("humble_dl.cli._run", new_callable=AsyncMock) as mock_run:
+            result = runner.invoke(app, ["download", "-l", str(tmp_path), "-c", str(cookie_file)])
             assert result.exit_code == 0
             call_kwargs = mock_run.call_args.kwargs
             assert call_kwargs["cookie_file"] == cookie_file

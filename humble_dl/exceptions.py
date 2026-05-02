@@ -1,5 +1,5 @@
 class HBDError(Exception):
-    """Base exception for humblebundle-downloader."""
+    """Base exception for humble-dl."""
 
 
 class AuthError(HBDError):

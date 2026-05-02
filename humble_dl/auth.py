@@ -34,16 +34,13 @@ def _cookies_from_rookiepy(browser: str | None = None) -> httpx.Cookies:
     try:
         import rookiepy
     except ImportError:
-        raise AuthError(
-            "rookiepy is not installed. Install with: pip install rookiepy"
-        )
+        raise AuthError("rookiepy is not installed. Install with: pip install rookiepy")
 
     if browser:
         fn = getattr(rookiepy, browser.lower(), None)
         if fn is None:
             raise AuthError(
-                f"Unknown browser: {browser}. "
-                f"Supported: {', '.join(_SUPPORTED_BROWSERS)}"
+                f"Unknown browser: {browser}. Supported: {', '.join(_SUPPORTED_BROWSERS)}"
             )
         cookie_list = fn([HUMBLE_DOMAIN])
     else:

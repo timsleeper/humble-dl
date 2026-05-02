@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from humblebundle_downloader.models import (
+from humble_dl.models import (
     AsmJsGame,
     CacheEntry,
     DownloadItem,

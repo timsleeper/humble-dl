@@ -1,8 +1,4 @@
-from pathlib import Path
-
-import pytest
-
-from humblebundle_downloader.utils import clean_name, rename_old_file
+from humble_dl.utils import clean_name, rename_old_file
 
 
 class TestCleanName:

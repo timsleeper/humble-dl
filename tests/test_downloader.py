@@ -2,24 +2,19 @@ import asyncio
 import hashlib
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 import respx
 
-from humblebundle_downloader.api import HumbleBundleAPI
-from humblebundle_downloader.cache import DownloadCache
-from humblebundle_downloader.downloader import DownloadEngine
-from humblebundle_downloader.exceptions import APIError
-from humblebundle_downloader.models import (
+from humble_dl.api import HumbleBundleAPI
+from humble_dl.cache import DownloadCache
+from humble_dl.downloader import DownloadEngine
+from humble_dl.models import (
     AsmJsGame,
     DownloadItem,
     DownloadStatus,
     DownloadType,
-    Order,
-    Product,
-    TroveProduct,
 )
 
 
@@ -74,7 +69,9 @@ def make_item(
 class TestDownloadItemFiltering:
     async def test_skips_excluded_platform(self, api, cache, library_path):
         engine = DownloadEngine(
-            api=api, cache=cache, library_path=library_path,
+            api=api,
+            cache=cache,
+            library_path=library_path,
             platform_include=["linux"],
         )
         item = make_item(platform="windows", local_path=library_path / "f.pdf")
@@ -83,7 +80,9 @@ class TestDownloadItemFiltering:
 
     async def test_skips_excluded_extension(self, api, cache, library_path):
         engine = DownloadEngine(
-            api=api, cache=cache, library_path=library_path,
+            api=api,
+            cache=cache,
+            library_path=library_path,
             ext_exclude=["pdf"],
         )
         item = make_item(local_path=library_path / "book.pdf")
@@ -93,7 +92,10 @@ class TestDownloadItemFiltering:
     async def test_skips_when_cached_and_no_update(self, api, cache, library_path):
         await cache.set("order1:file.pdf", {"url_last_modified": "some-date"})
         engine = DownloadEngine(
-            api=api, cache=cache, library_path=library_path, update=False,
+            api=api,
+            cache=cache,
+            library_path=library_path,
+            update=False,
         )
         item = make_item(local_path=library_path / "f.pdf")
         status = await engine._download_item(item)
@@ -171,9 +173,7 @@ class TestDoDownload:
     @respx.mock
     async def test_handles_404(self, engine, library_path):
         download_path = library_path / "missing.txt"
-        respx.get("https://dl.example.com/missing.txt").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get("https://dl.example.com/missing.txt").mock(return_value=httpx.Response(404))
 
         item = make_item(
             url="https://dl.example.com/missing.txt",
@@ -418,7 +418,9 @@ class TestCacheFlushInterval:
         await cache.load()
 
         engine = DownloadEngine(
-            api=api, cache=cache, library_path=library_path,
+            api=api,
+            cache=cache,
+            library_path=library_path,
         )
 
         # Download 15 files to trigger flush
@@ -451,7 +453,9 @@ class TestConcurrentDownloads:
 
         max_concurrent = 2
         engine = DownloadEngine(
-            api=api, cache=cache, library_path=library_path,
+            api=api,
+            cache=cache,
+            library_path=library_path,
             max_concurrent=max_concurrent,
         )
 
@@ -480,11 +484,13 @@ class TestConcurrentDownloads:
             respx.get(f"https://dl.example.com/file_{i}.txt").mock(
                 return_value=httpx.Response(200, content=b"data")
             )
-            items.append(make_item(
-                cache_key=f"key_{i}",
-                url=f"https://dl.example.com/file_{i}.txt",
-                local_path=download_path,
-            ))
+            items.append(
+                make_item(
+                    cache_key=f"key_{i}",
+                    url=f"https://dl.example.com/file_{i}.txt",
+                    local_path=download_path,
+                )
+            )
 
         await asyncio.gather(*[engine._download_item(item) for item in items])
         assert max_active <= max_concurrent
@@ -509,9 +515,9 @@ class TestProcessOrder:
                 },
             ],
         }
-        respx.get(
-            "https://www.humblebundle.com/api/v1/order/key1?all_tpkds=true"
-        ).mock(return_value=httpx.Response(200, json=order_json))
+        respx.get("https://www.humblebundle.com/api/v1/order/key1?all_tpkds=true").mock(
+            return_value=httpx.Response(200, json=order_json)
+        )
 
         respx.get("https://dl.example.com/game1.zip").mock(
             return_value=httpx.Response(

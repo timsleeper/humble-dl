@@ -52,9 +52,7 @@ class DownloadCache:
                 return
             self._cache_file.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self._cache_file.with_suffix(".tmp")
-            tmp_path.write_text(
-                json.dumps(self._data, sort_keys=True, indent=4)
-            )
+            tmp_path.write_text(json.dumps(self._data, sort_keys=True, indent=4))
             tmp_path.rename(self._cache_file)
             self._dirty = False
             logger.debug("Cache flushed to disk")

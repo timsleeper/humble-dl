@@ -166,7 +166,9 @@ class HumbleBundleAPI:
                             local_path=product_folder / url_filename,
                             download_type=DownloadType.URL,
                             platform=platform,
-                            extension=url_filename.rsplit(".", 1)[-1] if "." in url_filename else "",
+                            extension=url_filename.rsplit(".", 1)[-1]
+                            if "." in url_filename
+                            else "",
                             md5=file_type.get("md5"),
                         )
                     )
