@@ -1,6 +1,6 @@
 [project]
 name = "humble-dl"
-version = "0.5.1"
+version = "0.6.0"
 description = "Download your Humble Bundle library"
 readme = "README.md"
 license = {text = "MIT"}

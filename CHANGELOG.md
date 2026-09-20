@@ -1,6 +1,41 @@
 # Change log
 
 
+## 0.6.0
+
+- **Fix**: files whose upstream MD5 is stale were downloaded correctly, rejected,
+  and silently deleted. Humble serves newer editions of some files without
+  refreshing `file_size`/`md5` in its order API -- 484 of 4174 files (12%) in
+  one reference library. The upstream hash is now advisory: a mismatch warns and
+  keeps the file, recording the real hash as `file_md5`. The `DownloadError`
+  handler also deleted without logging, making the loss invisible.
+- **Fix**: `cache_key` and `local_path` were both derived from the URL basename,
+  so two entries in one product sharing a basename collapsed onto one slot and
+  streamed onto the same file concurrently. Identical entries are now dropped,
+  and a repeated basename with a different md5 is suffixed with Humble's own
+  `name` label. The first occurrence keeps its bare name, so existing caches
+  stay valid.
+- **Fix**: two different orders can resolve to one path (the same bundle bought
+  twice), which no parse-time dedupe can catch. The engine now claims a path for
+  the duration of a run so exactly one task writes it.
+- **Fix**: non-200 responses logged at `debug`, invisible without `--verbose`.
+  Now `warning`.
+- **New**: transient HTTP statuses (408, 425, 429, 5xx) are retried instead of
+  being a permanent give-up.
+- **New**: end-of-run summary (`N downloaded  N skipped  N failed`) and a
+  non-zero exit code when anything fails. Previously a run that dropped 484
+  files still exited 0 with an empty error log.
+- **Breaking**: Trove cache keys are now scoped by product title
+  (`trove:{title}:{file}`) so they match the path written to. Existing Trove
+  cache entries are orphaned and will be re-checked once.
+- **Security**: floor `anyio>=4.14.2` (CVE-2026-63374, critical -- TLS
+  certificate spoofing via IDNA 2003 host name encoding in `TLSStream`, which
+  httpcore's async backend routes every HTTPS request through) and `idna>=3.15`
+  (CVE-2026-45409). Both are transitive via httpx.
+- See `KNOWN_ISSUES.md` for the full diagnosis of both data-loss defects,
+  including two incorrect diagnoses made along the way.
+
+
 ## 0.5.1
 
 - **Rebrand**: project renamed to `humble-dl`. Distribution name on PyPI is now
