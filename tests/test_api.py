@@ -219,7 +219,8 @@ class TestGetTroveCatalog:
 
         products = await api.get_trove_catalog(tmp_path)
         item = products[0].downloads[0]
-        assert item.cache_key == "trove:trove_game.zip"
+        # key is scoped by product title so it matches the path we write to
+        assert item.cache_key == "trove:Trove Game 1:trove_game.zip"
         assert item.platform == "windows"
         assert item.uploaded_at == "1715769045"
         assert item.md5 == "abc123"
@@ -282,3 +283,71 @@ class TestDownloadStream:
         )
         async with api.download_stream("/file.zip") as response:
             assert response.status_code == 200
+
+
+class TestDuplicateBasenames:
+    """download_struct may list several entries sharing one URL basename."""
+
+    def _product(self, structs):
+        return {
+            "human_name": "Some Book",
+            "downloads": [{"platform": "video", "download_struct": structs}],
+        }
+
+    def test_same_basename_different_md5_gets_distinct_key_and_path(self, api, tmp_path):
+        product = self._product(
+            [
+                {"name": "ZIP", "md5": "aaa", "url": {"web": "https://d/x/book.zip"}},
+                {"name": "Download", "md5": "bbb", "url": {"web": "https://d/y/book.zip"}},
+            ]
+        )
+        result = api._parse_product("ORD1", "Bundle", product, tmp_path)
+
+        assert len(result.downloads) == 2
+        keys = [d.cache_key for d in result.downloads]
+        paths = [d.local_path for d in result.downloads]
+        assert len(set(keys)) == 2, "colliding cache keys"
+        assert len(set(paths)) == 2, "colliding local paths"
+
+        # first occurrence keeps the bare name, so existing caches stay valid
+        assert keys[0] == "ORD1:book.zip"
+        assert paths[0].name == "book.zip"
+        # second is disambiguated by Humble's own label
+        assert keys[1] == "ORD1:Download:book.zip"
+        assert paths[1].name == "book [Download].zip"
+
+    def test_identical_entries_are_deduplicated(self, api, tmp_path):
+        product = self._product(
+            [
+                {"name": "ZIP", "md5": "same", "url": {"web": "https://d/x/book.zip"}},
+                {"name": "ZIP", "md5": "same", "url": {"web": "https://d/x/book.zip"}},
+            ]
+        )
+        result = api._parse_product("ORD1", "Bundle", product, tmp_path)
+        assert len(result.downloads) == 1
+        assert result.downloads[0].cache_key == "ORD1:book.zip"
+
+    def test_distinct_basenames_are_untouched(self, api, tmp_path):
+        product = self._product(
+            [
+                {"name": "PDF", "md5": "a", "url": {"web": "https://d/x/book.pdf"}},
+                {"name": "EPUB", "md5": "b", "url": {"web": "https://d/x/book.epub"}},
+            ]
+        )
+        result = api._parse_product("ORD1", "Bundle", product, tmp_path)
+        assert [d.cache_key for d in result.downloads] == [
+            "ORD1:book.pdf",
+            "ORD1:book.epub",
+        ]
+        assert [d.local_path.name for d in result.downloads] == ["book.pdf", "book.epub"]
+
+    def test_extensionless_duplicate_is_still_disambiguated(self, api, tmp_path):
+        product = self._product(
+            [
+                {"name": "A", "md5": "a", "url": {"web": "https://d/x/README"}},
+                {"name": "B", "md5": "b", "url": {"web": "https://d/y/README"}},
+            ]
+        )
+        result = api._parse_product("ORD1", "Bundle", product, tmp_path)
+        names = [d.local_path.name for d in result.downloads]
+        assert names == ["README", "README [B]"]

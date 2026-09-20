@@ -241,8 +241,9 @@ class TestDoDownload:
         assert download_path.read_bytes() == content
 
     @respx.mock
-    async def test_md5_mismatch_deletes_file(self, engine, library_path):
-        content = b"corrupted content"
+    async def test_md5_mismatch_keeps_file_and_records_real_md5(self, engine, library_path, cache):
+        """Upstream md5 is advisory: Humble serves newer editions than it declares."""
+        content = b"newer edition bytes"
         download_path = library_path / "bad.pdf"
 
         respx.get("https://dl.example.com/bad.pdf").mock(
@@ -255,9 +256,17 @@ class TestDoDownload:
             local_path=download_path,
             md5="0000000000000000000000000000dead",
         )
-        with pytest.raises(Exception):
-            await engine._do_download(item, None)
-        assert not download_path.exists()
+        status = await engine._do_download(item, None)
+
+        assert status == DownloadStatus.COMPLETED
+        assert download_path.exists()
+        assert download_path.read_bytes() == content
+
+        cached = await cache.get("order1:bad.pdf")
+        # the cache records what we actually got, not the bogus upstream claim
+        assert cached["file_md5"] == hashlib.md5(content).hexdigest()
+        assert cached["file_size"] == len(content)
+        assert cached["md5"] == "0000000000000000000000000000dead"
 
     @respx.mock
     async def test_no_md5_skips_verification(self, engine, library_path):
@@ -325,8 +334,7 @@ class TestProgressTaskCleanup:
                 local_path=download_path,
                 md5="0" * 32,
             )
-            with pytest.raises(Exception):
-                await engine._do_download(item, None)
+            await engine._do_download(item, None)
             assert progress.tasks == []
 
     @respx.mock
@@ -672,7 +680,7 @@ class TestDownloadRetry:
 
     @respx.mock
     async def test_md5_mismatch_does_not_retry(self, engine, library_path, monkeypatch):
-        """MD5 mismatch is a hard failure — retry won't change the bytes."""
+        """MD5 mismatch never retries — retry won't change the bytes."""
         from humble_dl import downloader as downloader_mod
 
         monkeypatch.setattr(downloader_mod, "RETRY_BACKOFF_BASE", 0)
@@ -687,10 +695,10 @@ class TestDownloadRetry:
             local_path=download_path,
             md5="0" * 32,
         )
-        with pytest.raises(Exception):
-            await engine._do_download(item, None)
+        status = await engine._do_download(item, None)
+        assert status == DownloadStatus.COMPLETED
         assert route.call_count == 1
-        assert not download_path.exists()
+        assert download_path.exists()
 
     @respx.mock
     async def test_404_does_not_retry(self, engine, library_path, monkeypatch):
@@ -731,3 +739,168 @@ class TestDownloadRetry:
         await engine._do_download(item, None)
         # 3 attempts → 2 sleeps with doubling backoff
         assert sleep_calls == [2.0, 4.0]
+
+
+class TestTransientStatusRetry:
+    @respx.mock
+    async def test_503_is_retried_then_succeeds(self, engine, library_path, monkeypatch):
+        from humble_dl import downloader as downloader_mod
+
+        monkeypatch.setattr(downloader_mod, "RETRY_BACKOFF_BASE", 0)
+        body = b"recovered"
+        route = respx.get("https://dl.example.com/f.bin").mock(
+            side_effect=[
+                httpx.Response(503),
+                httpx.Response(200, content=body),
+            ]
+        )
+        path = library_path / "f.bin"
+        item = make_item(url="https://dl.example.com/f.bin", local_path=path, md5=None)
+
+        status = await engine._do_download(item, None)
+
+        assert status == DownloadStatus.COMPLETED
+        assert route.call_count == 2
+        assert path.read_bytes() == body
+
+    @respx.mock
+    async def test_429_is_retried(self, engine, library_path, monkeypatch):
+        from humble_dl import downloader as downloader_mod
+
+        monkeypatch.setattr(downloader_mod, "RETRY_BACKOFF_BASE", 0)
+        route = respx.get("https://dl.example.com/f.bin").mock(
+            side_effect=[httpx.Response(429), httpx.Response(200, content=b"ok")]
+        )
+        item = make_item(
+            url="https://dl.example.com/f.bin", local_path=library_path / "f.bin", md5=None
+        )
+        assert await engine._do_download(item, None) == DownloadStatus.COMPLETED
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_404_is_not_retried_and_is_logged(self, engine, library_path, caplog):
+        route = respx.get("https://dl.example.com/gone.bin").mock(return_value=httpx.Response(404))
+        path = library_path / "gone.bin"
+        item = make_item(url="https://dl.example.com/gone.bin", local_path=path, md5=None)
+
+        with caplog.at_level("WARNING"):
+            status = await engine._do_download(item, None)
+
+        assert status == DownloadStatus.FAILED
+        assert route.call_count == 1
+        assert not path.exists()
+        # must be visible without --verbose
+        assert any("404" in r.message for r in caplog.records)
+
+    @respx.mock
+    async def test_exhausted_transient_status_fails(self, engine, library_path, monkeypatch):
+        from humble_dl import downloader as downloader_mod
+
+        monkeypatch.setattr(downloader_mod, "RETRY_BACKOFF_BASE", 0)
+        route = respx.get("https://dl.example.com/f.bin").mock(return_value=httpx.Response(503))
+        item = make_item(
+            url="https://dl.example.com/f.bin", local_path=library_path / "f.bin", md5=None
+        )
+        assert await engine._do_download(item, None) == DownloadStatus.FAILED
+        assert route.call_count == downloader_mod.RETRY_ATTEMPTS
+
+
+class TestOutcomeAccounting:
+    @respx.mock
+    async def test_stats_count_completed_and_failed(self, engine, library_path):
+        respx.get("https://dl.example.com/ok.bin").mock(
+            return_value=httpx.Response(200, content=b"ok")
+        )
+        respx.get("https://dl.example.com/no.bin").mock(return_value=httpx.Response(404))
+
+        await engine._download_item(
+            make_item(
+                cache_key="o:ok.bin",
+                url="https://dl.example.com/ok.bin",
+                local_path=library_path / "ok.bin",
+                md5=None,
+            )
+        )
+        await engine._download_item(
+            make_item(
+                cache_key="o:no.bin",
+                url="https://dl.example.com/no.bin",
+                local_path=library_path / "no.bin",
+                md5=None,
+            )
+        )
+
+        assert engine.stats["completed"] == 1
+        assert engine.stats["failed"] == 1
+
+    async def test_unreadable_order_is_counted_not_swallowed(self, engine, monkeypatch):
+        from humble_dl.exceptions import APIError
+
+        async def boom(*a, **k):
+            raise APIError("nope")
+
+        monkeypatch.setattr(engine._api, "get_order", boom)
+        await engine._process_order("ORDER")
+        assert engine.stats["order_failed"] == 1
+
+    async def test_download_library_returns_stats(self, engine, monkeypatch):
+        async def no_keys():
+            return []
+
+        monkeypatch.setattr(engine._api, "get_purchase_keys", no_keys)
+        stats = await engine.download_library()
+        assert stats is engine.stats
+
+
+class TestPathClaiming:
+    @respx.mock
+    async def test_two_keys_one_path_download_once(self, engine, library_path):
+        """Same bundle in two orders resolves to one file: only one writer."""
+        route = respx.get("https://dl.example.com/dup.bin").mock(
+            return_value=httpx.Response(200, content=b"payload")
+        )
+        shared = library_path / "dup.bin"
+
+        first = make_item(
+            cache_key="ORDER_A:dup.bin",
+            url="https://dl.example.com/dup.bin",
+            local_path=shared,
+            md5=None,
+        )
+        second = make_item(
+            cache_key="ORDER_B:dup.bin",
+            url="https://dl.example.com/dup.bin",
+            local_path=shared,
+            md5=None,
+        )
+
+        results = await asyncio.gather(engine._download_item(first), engine._download_item(second))
+
+        assert route.call_count == 1, "path was downloaded twice"
+        assert sorted(r.value for r in results) == ["completed", "skipped"]
+        assert shared.read_bytes() == b"payload"
+
+    @respx.mock
+    async def test_distinct_paths_both_download(self, engine, library_path):
+        respx.get("https://dl.example.com/a.bin").mock(
+            return_value=httpx.Response(200, content=b"a")
+        )
+        respx.get("https://dl.example.com/b.bin").mock(
+            return_value=httpx.Response(200, content=b"b")
+        )
+        items = [
+            make_item(
+                cache_key="O:a.bin",
+                url="https://dl.example.com/a.bin",
+                local_path=library_path / "a.bin",
+                md5=None,
+            ),
+            make_item(
+                cache_key="O:b.bin",
+                url="https://dl.example.com/b.bin",
+                local_path=library_path / "b.bin",
+                md5=None,
+            ),
+        ]
+        results = await asyncio.gather(*[engine._download_item(i) for i in items])
+        assert all(r == DownloadStatus.COMPLETED for r in results)

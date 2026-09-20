@@ -223,11 +223,31 @@ async def _run(
             )
 
             if trove:
-                await engine.download_trove()
+                stats = await engine.download_trove()
             else:
-                await engine.download_library(purchase_keys=purchase_keys)
+                stats = await engine.download_library(purchase_keys=purchase_keys)
 
         await cache.flush()
+
+    completed = stats.get("completed", 0)
+    skipped = stats.get("skipped", 0)
+    failed = stats.get("failed", 0)
+    order_failed = stats.get("order_failed", 0)
+
+    console.print()
+    console.print(
+        f"[green]{completed} downloaded[/]  "
+        f"[dim]{skipped} skipped[/]  "
+        f"[red]{failed} failed[/]"
+        + (f"  [red]{order_failed} orders unreadable[/]" if order_failed else "")
+    )
+
+    if failed or order_failed:
+        console.print(
+            "[yellow]Some items did not download.[/] Re-run to retry them; "
+            "already-downloaded files are skipped."
+        )
+        raise typer.Exit(code=1)
 
 
 @app.command()

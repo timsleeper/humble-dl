@@ -151,6 +151,14 @@ class HumbleBundleAPI:
         downloads: list[DownloadItem | AsmJsGame] = []
         external_links: list[str] = []
 
+        # A product's download_struct can list several entries sharing one URL
+        # basename. Humble tells them apart with the "name" field; deriving the
+        # cache key and local path from the basename alone collapses them onto
+        # one slot, so concurrent writers clobber each other. Track what we have
+        # already emitted for this product to keep both distinct.
+        seen_names: set[str] = set()
+        seen_files: set[tuple[str, str | None]] = set()
+
         for download_type in product_data["downloads"]:
             platform = download_type["platform"]
 
@@ -158,18 +166,40 @@ class HumbleBundleAPI:
                 if "url" in file_type and "web" in file_type["url"]:
                     url = file_type["url"]["web"]
                     url_filename = url.split("?")[0].split("/")[-1]
-                    cache_key = f"{order_id}:{url_filename}"
+                    md5 = file_type.get("md5")
+
+                    # The same file listed twice: nothing to disambiguate, and
+                    # downloading it again would only waste bandwidth.
+                    if (url_filename, md5) in seen_files:
+                        continue
+                    seen_files.add((url_filename, md5))
+
+                    if url_filename in seen_names:
+                        # Genuinely different file under a name already taken.
+                        # Suffix with Humble's own label. The first occurrence
+                        # keeps the bare name so existing caches stay valid.
+                        label = clean_name(file_type.get("name") or "alt")
+                        stem, dot, ext = url_filename.rpartition(".")
+                        local_name = (
+                            f"{stem} [{label}].{ext}" if dot else f"{url_filename} [{label}]"
+                        )
+                        cache_key = f"{order_id}:{label}:{url_filename}"
+                    else:
+                        seen_names.add(url_filename)
+                        local_name = url_filename
+                        cache_key = f"{order_id}:{url_filename}"
+
                     downloads.append(
                         DownloadItem(
                             cache_key=cache_key,
                             url=url,
-                            local_path=product_folder / url_filename,
+                            local_path=product_folder / local_name,
                             download_type=DownloadType.URL,
                             platform=platform,
                             extension=url_filename.rsplit(".", 1)[-1]
                             if "." in url_filename
                             else "",
-                            md5=file_type.get("md5"),
+                            md5=md5,
                         )
                     )
                 elif "asm_config" in file_type:
@@ -216,7 +246,9 @@ class HumbleBundleAPI:
 
         for platform, download in product_data["downloads"].items():
             web_name = download["url"]["web"].split("/")[-1]
-            cache_key = f"trove:{web_name}"
+            # Scope by product title so the key matches the path we write to;
+            # a bare "trove:<file>" collides across products.
+            cache_key = f"trove:{title}:{web_name}"
             uploaded_at = (
                 download.get("uploaded_at")
                 or download.get("timestamp")
