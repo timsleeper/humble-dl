@@ -28,6 +28,14 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "rookiepy>=0.5",
+    # Transitive via httpx, floored for security rather than API needs:
+    # anyio  < 4.14.2 -> CVE-2026-63374, TLS certificate spoofing via IDNA 2003
+    #                    host name encoding in TLSStream (httpcore's async
+    #                    backend routes every HTTPS request through it)
+    # idna   < 3.15   -> CVE-2026-45409, crafted input bypasses the
+    #                    CVE-2024-3651 fix in idna.encode()
+    "anyio>=4.14.2",
+    "idna>=3.15",
 ]
 
 [project.optional-dependencies]

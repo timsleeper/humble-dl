@@ -255,7 +255,9 @@ version = "0.5.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
+    { name = "anyio" },
     { name = "httpx" },
+    { name = "idna" },
     { name = "parsel" },
     { name = "rich" },
     { name = "rookiepy" },
@@ -276,7 +278,9 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=24.1" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "idna", specifier = ">=3.15" },
     { name = "parsel", specifier = ">=1.9" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.3" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=1.0" },
