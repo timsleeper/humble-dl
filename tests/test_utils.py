@@ -1,4 +1,9 @@
-from humble_dl.utils import clean_name, rename_old_file
+import os
+from pathlib import Path
+
+import pytest
+
+from humble_dl.utils import clean_name, fs_path, rename_old_file
 
 
 class TestCleanName:
@@ -96,3 +101,42 @@ class TestRenameOldFile:
         result = rename_old_file(f, "2024-01-15")
         # Path.stem is "archive.tar", Path.suffix is ".gz"
         assert result == tmp_path / "archive.tar_2024-01-15.gz"
+
+
+class TestFsPath:
+    BSL = chr(92)  # one backslash, no escaping games
+    EXT = BSL * 2 + "?" + BSL  # the extended-length prefix value
+    EXT_UNC = BSL * 2 + "?" + BSL + "UNC" + BSL  # the UNC extended-length prefix
+
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX behaviour")
+    def test_identity_on_posix(self):
+        p = Path("/tmp/a/b/c.txt")
+        assert fs_path(p) is p
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows behaviour")
+    def test_prefixes_local_drive_on_windows(self):
+        out = str(fs_path(Path("C:/Users/x/deep/file.txt")))
+        assert out.startswith(self.EXT + "C:")
+        assert out.endswith("file.txt")
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows behaviour")
+    def test_prefixes_unc_on_windows(self):
+        out = str(fs_path(Path("//server/share/dir/file.txt")))
+        assert out.startswith(self.EXT_UNC + "server")
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows behaviour")
+    def test_idempotent_on_windows(self):
+        once = fs_path(Path("C:/a/b.txt"))
+        assert fs_path(once) == once
+
+    @pytest.mark.skipif(os.name != "nt", reason="Windows long-path write")
+    def test_long_path_write_roundtrip(self, tmp_path):
+        deep = tmp_path
+        for _ in range(6):
+            deep = deep / ("x" * 50)
+        target = deep / ("y" * 50 + ".txt")
+        assert len(str(target)) > 260  # a plain open() would fail here
+        fp = fs_path(target)
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text("ok")
+        assert fp.read_text() == "ok"

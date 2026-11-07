@@ -18,7 +18,7 @@ from .cache import DownloadCache
 from .exceptions import APIError, DownloadError
 from .filters import should_download_file, should_download_platform
 from .models import AsmJsGame, DownloadItem, DownloadStatus, DownloadType
-from .utils import rename_old_file
+from .utils import fs_path, rename_old_file
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,10 @@ class DownloadEngine:
         self, item: DownloadItem, cached: dict[str, Any] | None
     ) -> DownloadStatus:
         """Perform the actual streamed download with progress tracking."""
-        item.local_path.parent.mkdir(parents=True, exist_ok=True)
+        # Open/create via the extended-length form so deep Windows paths work;
+        # item.local_path stays clean for logging and the cache record.
+        dst = fs_path(item.local_path)
+        dst.parent.mkdir(parents=True, exist_ok=True)
 
         downloaded = 0
         md5_hash = hashlib.md5()
@@ -220,7 +223,7 @@ class DownloadEngine:
                     if self._progress and total:
                         task_id = self._progress.add_task(item.local_path.name, total=total)
 
-                    async with aiofiles.open(item.local_path, "wb") as f:
+                    async with aiofiles.open(dst, "wb") as f:
                         async for chunk in response.aiter_bytes(chunk_size=8192):
                             await f.write(chunk)
                             downloaded += len(chunk)
@@ -249,12 +252,12 @@ class DownloadEngine:
                 # No longer reachable from the md5 check, but keep the handler
                 # defensive -- and never delete a file without saying so.
                 logger.error(f"Discarding {item.local_path.name}: {e}")
-                if item.local_path.exists():
-                    item.local_path.unlink()
+                if dst.exists():
+                    dst.unlink()
                 raise
             except (*RETRYABLE_EXCEPTIONS, _RetryableStatus) as e:
-                if item.local_path.exists():
-                    item.local_path.unlink()
+                if dst.exists():
+                    dst.unlink()
                 if attempt < RETRY_ATTEMPTS:
                     wait = RETRY_BACKOFF_BASE * (2 ** (attempt - 1))
                     logger.warning(
@@ -270,8 +273,8 @@ class DownloadEngine:
                 return DownloadStatus.FAILED
             except Exception:
                 logger.exception(f"Failed to download {item.local_path.name}")
-                if item.local_path.exists():
-                    item.local_path.unlink()
+                if dst.exists():
+                    dst.unlink()
                 return DownloadStatus.FAILED
             finally:
                 if task_id is not None and self._progress is not None:
@@ -362,10 +365,10 @@ class DownloadEngine:
             return
 
         html_path = game.local_folder / f"{game.game_name}.html"
-        if not html_path.exists():
+        if not fs_path(html_path).exists():
             return
 
-        manifest = self._api.parse_asmjs_manifest(html_path.read_text())
+        manifest = self._api.parse_asmjs_manifest(fs_path(html_path).read_text())
 
         # Create local.html with URLs replaced by local filenames
         if html_status == DownloadStatus.COMPLETED:
@@ -391,14 +394,14 @@ class DownloadEngine:
         try:
             src = game.local_folder / f"{game.game_name}.html"
             dst = game.local_folder / f"{game.game_name}.local.html"
-            async with aiofiles.open(src, "r") as f_in:
+            async with aiofiles.open(fs_path(src), "r") as f_in:
                 content = await f_in.read()
             for local_name, remote_url in manifest.items():
                 content = content.replace(
                     f'"{local_name}": "{remote_url}"',
                     f'"{local_name}": "{local_name}"',
                 )
-            async with aiofiles.open(dst, "w") as f_out:
+            async with aiofiles.open(fs_path(dst), "w") as f_out:
                 await f_out.write(content)
         except Exception:
             logger.exception(f"Failed to create local HTML for {game.game_name}")

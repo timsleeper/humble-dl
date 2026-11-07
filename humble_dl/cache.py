@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .utils import fs_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +25,7 @@ class DownloadCache:
     async def load(self) -> None:
         """Load cache from disk. Safe to call if file doesn't exist."""
         try:
-            text = self._cache_file.read_text()
+            text = fs_path(self._cache_file).read_text()
             self._data = json.loads(text)
         except FileNotFoundError:
             self._data = {}
@@ -50,10 +52,14 @@ class DownloadCache:
         async with self._lock:
             if not self._dirty:
                 return
-            self._cache_file.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = self._cache_file.with_suffix(".tmp")
+            cache_file = fs_path(self._cache_file)
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = cache_file.with_suffix(".tmp")
             tmp_path.write_text(json.dumps(self._data, sort_keys=True, indent=4))
-            tmp_path.rename(self._cache_file)
+            # replace(), not rename(): on Windows os.rename raises
+            # FileExistsError when the destination exists, so an atomic
+            # overwrite of an existing cache must go through os.replace.
+            tmp_path.replace(cache_file)
             self._dirty = False
             logger.debug("Cache flushed to disk")
 
