@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import httpx
@@ -303,7 +304,7 @@ class TestProgressTaskCleanup:
             )
         )
 
-        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+        with Progress(console=Console(file=open(os.devnull, "w"))) as progress:
             engine = DownloadEngine(
                 api=api, cache=cache, library_path=library_path, progress=progress
             )
@@ -325,7 +326,7 @@ class TestProgressTaskCleanup:
             )
         )
 
-        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+        with Progress(console=Console(file=open(os.devnull, "w"))) as progress:
             engine = DownloadEngine(
                 api=api, cache=cache, library_path=library_path, progress=progress
             )
@@ -354,7 +355,7 @@ class TestProgressTaskCleanup:
             )
         )
 
-        with Progress(console=Console(file=open("/dev/null", "w"))) as progress:
+        with Progress(console=Console(file=open(os.devnull, "w"))) as progress:
             engine = DownloadEngine(
                 api=api, cache=cache, library_path=library_path, progress=progress
             )

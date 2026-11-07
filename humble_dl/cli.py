@@ -18,6 +18,7 @@ from rich.table import Table
 
 from .auth import create_client
 from .exceptions import AuthError
+from .utils import fs_path
 
 console = Console()
 
@@ -294,16 +295,17 @@ def verify(
 
         for key, entry in entries_with_path:
             local_path = Path(entry["local_path"])
+            fpath = fs_path(local_path)
             progress.update(task, description=local_path.name)
 
-            if not local_path.exists():
+            if not fpath.exists():
                 missing.append(key)
                 progress.advance(task)
                 continue
 
             expected_size = entry.get("file_size")
             if expected_size is not None:
-                actual_size = local_path.stat().st_size
+                actual_size = fpath.stat().st_size
                 if actual_size != expected_size:
                     size_mismatch.append((key, expected_size, actual_size))
                     progress.advance(task)
@@ -312,7 +314,7 @@ def verify(
             expected_md5 = entry.get("file_md5")
             if expected_md5 is not None:
                 md5_hash = hashlib.md5()
-                with open(local_path, "rb") as f:
+                with open(fpath, "rb") as f:
                     for chunk in iter(lambda: f.read(8192), b""):
                         md5_hash.update(chunk)
                 if md5_hash.hexdigest() != expected_md5:
