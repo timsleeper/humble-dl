@@ -2,11 +2,27 @@ import hashlib
 import json
 from unittest.mock import AsyncMock, patch
 
+import typer
 from typer.testing import CliRunner
 
 from humble_dl.cli import app
 
 runner = CliRunner()
+
+
+def _option_names(command_name: str) -> set[str]:
+    """All option strings (long and short) declared on a subcommand.
+
+    Introspects the click command rather than scraping rendered --help text,
+    which rich wraps/truncates depending on the terminal width (and so is not
+    reliable to assert against, especially in a non-TTY CI shell).
+    """
+    command = typer.main.get_command(app).commands[command_name]
+    names: set[str] = set()
+    for param in command.params:
+        names.update(param.opts)
+        names.update(param.secondary_opts)
+    return names
 
 
 class TestAuthValidation:
@@ -57,24 +73,28 @@ class TestHelpOutput:
     def test_download_help_shows_all_options(self):
         result = runner.invoke(app, ["download", "--help"])
         assert result.exit_code == 0
-        assert "--library-path" in result.output
-        assert "--cookie-file" in result.output
-        assert "--session-auth" in result.output
-        assert "--browser" in result.output
-        assert "--auto" in result.output
-        assert "--trove" in result.output
-        assert "--update" in result.output
-        assert "--platform" in result.output
-        assert "--include" in result.output
-        assert "--exclude" in result.output
-        assert "--keys" in result.output
-        assert "--concurrent" in result.output
-        assert "--verbose" in result.output
+        opts = _option_names("download")
+        for flag in (
+            "--library-path",
+            "--cookie-file",
+            "--session-auth",
+            "--browser",
+            "--auto",
+            "--trove",
+            "--update",
+            "--platform",
+            "--include",
+            "--exclude",
+            "--keys",
+            "--concurrent",
+            "--verbose",
+        ):
+            assert flag in opts
 
     def test_verify_help_shows_options(self):
         result = runner.invoke(app, ["verify", "--help"])
         assert result.exit_code == 0
-        assert "--library-path" in result.output
+        assert "--library-path" in _option_names("verify")
 
 
 class TestLibraryPathRequired:
